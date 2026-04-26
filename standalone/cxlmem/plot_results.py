@@ -1,12 +1,20 @@
 #!/usr/bin/env python3
 import argparse
 import csv
+import re
 from pathlib import Path
 
 
+
+
+def natural_key(text: str):
+    return [int(tok) if tok.isdigit() else tok.lower() for tok in re.split(r"(\d+)", text)]
+
 def load_rows(csv_path: Path):
     with csv_path.open() as f:
-        return list(csv.DictReader(f))
+        rows = list(csv.DictReader(f))
+    rows.sort(key=lambda r: natural_key(r.get("case", "")))
+    return rows
 
 
 def to_float(v, d=0.0):

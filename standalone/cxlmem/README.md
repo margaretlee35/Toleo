@@ -81,6 +81,22 @@ You can pass a custom run tag:
 ./run_all_options.sh my_experiment_tag
 ```
 
+## Case name meanings
+
+Case names in `raw/*.log`, `summary.csv`, and plots encode the varied parameter:
+
+- `baseline`: both extra-slot toggles off (`--extra-m2s-write 0 --extra-s2m-read-rsp 0`)
+- `m2s_plus1`: only M2S write uses `base_m2s_write_slots + 1`
+- `s2m_plus1`: only S2M read response uses `base_s2m_read_rsp_slots + 1`
+- `both_plus1`: both M2S write and S2M read response use `+1` slot
+- `max_outstanding_X`: `X` is the value passed to `--max-outstanding`
+- `serdes_X`: `X` is `--serdes-time-per-flit` (sim-time units per flit serialization)
+- `readpct_X`: `X` is `--read-percent` (request mix read percentage)
+
+Example: `serdes_8` means `serdes_time_per_flit = 8` (not 8 flits).
+
+Natural numeric ordering is used when parsing/plotting case names (e.g. `serdes_8`, `serdes_16`, `serdes_32` will be ordered as 8,16,32).
+
 ## Parser compatibility notes
 
 The upstream Toleo evaluation parser is designed around full Sniper outputs (`sim.out`,
