@@ -1,0 +1,6 @@
+# Generated experiment outputs
+results/
+
+# Local build outputs
+cxl_mem_sim
+*.o
