@@ -1,24 +1,14 @@
-# Minimal CXL.mem (256B flit) research shim
+# Standalone CXL.mem 68B flit simulator
 
-This directory implements a standalone, minimal CXL.mem simulation layer intended
-for research experiments around slot-count perturbations and queue/occupancy
-sensitivity.
+This standalone model implements a CXL 2.0 style 68-byte flit link for CXL.mem-centric traffic:
 
-## Scope and simplifications
+- `H5`: M2S read request header flit (packs additional M2S Req headers).
+- `H4 + G0`: M2S write request header followed by paired data flit.
+- `G4 + G0`: S2M read-response header flit (optionally packs NDR acks) followed by paired data flit.
+- `G5`: S2M NDR-only ack flit (max 2 NDR/flit per CXL 1.1+ errata).
+- `G6`: S2M DRS-only header flit when no NDR is available to fill G4 generic slots, with up to 3 DRS headers/flit and one paired G0 per DRS.
 
-Implemented now:
-- 256B flit-mode model.
-- Dynamic slot generation per transaction.
-- Dynamic flit count determined by a packer (not hardcoded per request type).
-- M2S and S2M directional transmit queues and serialization/link delay.
-- Receive-side reassembly and completion bookkeeping.
-- Minimal DRAM backend wrapper with timing callback interface.
-- Synthetic CPU request source for fast functional experiments.
-
-Not implemented now:
-- Full CXL protocol compliance.
-- Linux/mailbox/enumeration/HDM/coherence/IDE/retry-replay.
-- SST-specific integration.
+The model tracks per-direction serialization queueing delay and reports aggregate latency, throughput, and flit efficiency statistics.
 
 ## Build
 
@@ -27,110 +17,37 @@ cd standalone/cxlmem
 make
 ```
 
-## Run one experiment
+## Run
 
 ```bash
-./cxl_mem_sim --num-reqs 400 --read-percent 60 \
-  --base-m2s-write-slots 4 \
-  --base-s2m-read-rsp-slots 4 \
-  --extra-m2s-write 0 --extra-s2m-read-rsp 0
+./cxl_mem_sim --read-percent 50 --num-reqs 400
 ```
 
-## Baseline vs +1 slot variants
+Supported CLI options:
 
-Use the helper script:
+- `--read-percent N`
+- `--num-reqs N`
+- `--link-latency N`
+- `--serdes-time-per-flit N`
+- `--backend-read-latency N`
+- `--backend-write-latency N`
+- `--max-outstanding N`
+
+## Batch sweep helper
 
 ```bash
 ./run_variants.sh
 ```
 
-It runs:
-1. baseline
-2. M2S write +1 slot
-3. S2M read response +1 slot
-4. both +1
+It emits:
 
-## Test flow (build + smoke cases)
-
-Run the end-to-end test flow script:
-
-```bash
-./test_flow.sh
+```text
+read_percent=25
+...
+read_percent=50
+...
+read_percent=75
+...
 ```
 
-This script builds the binary and runs baseline plus the three `+1 slot` variants,
-then validates key counters are present and non-zero.
-
-## One-command convenience flow
-
-For a one-stop workflow (build + run all preset options + parse + plot):
-
-```bash
-./run_all_options.sh
-```
-
-This creates a timestamped folder under `results/` containing:
-- `raw/*.log`: raw simulator outputs
-- `summary.csv`: parsed table for downstream analysis
-- `simout_compat/*.sim.out`: compatibility text files for parsers that expect `sim.out`-style key/value records
-- `plots/*.png`: quick comparison plots (or `plot_fallback.txt` if matplotlib is unavailable)
-
-You can pass a custom run tag:
-
-```bash
-./run_all_options.sh my_experiment_tag
-```
-
-## Case name meanings
-
-Case names in `raw/*.log`, `summary.csv`, and plots encode the varied parameter:
-
-- `baseline`: both extra-slot toggles off (`--extra-m2s-write 0 --extra-s2m-read-rsp 0`)
-- `m2s_plus1`: only M2S write uses `base_m2s_write_slots + 1`
-- `s2m_plus1`: only S2M read response uses `base_s2m_read_rsp_slots + 1`
-- `both_plus1`: both M2S write and S2M read response use `+1` slot
-- `max_outstanding_X`: `X` is the value passed to `--max-outstanding`
-- `serdes_X`: `X` is `--serdes-time-per-flit` (sim-time units per flit serialization)
-- `readpct_X`: `X` is `--read-percent` (request mix read percentage)
-
-Example: `serdes_8` means `serdes_time_per_flit = 8` (not 8 flits).
-
-Natural numeric ordering is used when parsing/plotting case names (e.g. `serdes_8`, `serdes_16`, `serdes_32` will be ordered as 8,16,32).
-
-## Parser compatibility notes
-
-The upstream Toleo evaluation parser is designed around full Sniper outputs (`sim.out`,
-`dram_trace_analysis.csv`) from benchmark runs. This standalone CXL shim is not a full Sniper
-run, so it does not generate those native artifacts directly.
-
-To make integration easier, `parse_results.py` emits:
-- `summary.csv` (easy import in pandas/R/spreadsheets), and
-- `simout_compat/*.sim.out` lightweight summaries for scripts expecting `sim.out`-like text files.
-
-## Key runtime parameters
-
-Supported parameters include:
-- `--base-m2s-write-slots`
-- `--base-s2m-read-rsp-slots`
-- `--extra-m2s-write`
-- `--extra-s2m-read-rsp`
-- `--packetize-delay`
-- `--depacketize-delay`
-- `--serdes-time-per-flit`
-- `--link-latency`
-- `--backend-read-latency`
-- `--backend-write-latency`
-- `--max-outstanding`
-- `--flush-policy` (`0=on_demand`, `1=always`)
-
-## Output stats
-
-The binary reports:
-- total M2S/S2M flits
-- slot totals by message type
-- extra-slot count
-- average flit occupancy and wasted bytes
-- queue delay per direction
-- average read/write latency
-- request count with changed flit count (vs baseline slot recipe)
-- throughput (`reqs/cycle` in this simple event-time model)
+so downstream scripts can parse each variant cleanly.
