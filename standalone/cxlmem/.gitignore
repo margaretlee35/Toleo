@@ -1,5 +1,5 @@
 # Generated experiment outputs
-results/
+#results/
 
 # Local build outputs
 cxl_mem_sim
