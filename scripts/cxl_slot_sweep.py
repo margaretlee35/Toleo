@@ -289,15 +289,24 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--bench", nargs="+", default=["bsw-s", "pr-kron-s"])
     ap.add_argument("--arch", nargs="+", default=["zen4_cxl", "zen4_vn"])
-    ap.add_argument("--max-parallel", type=int, default=4)
-    ap.add_argument("--icount", type=int, default=100000000)
-    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--max-parallel", type=int, default=4, help="Max concurrent Toleo jobs (default: 4).")
+    ap.add_argument("--icount", type=int, default=100000000, help="Sniper stop-by-icount value (default: 100000000).")
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print commands without running standalone or Toleo simulations (default: disabled).",
+    )
     args = ap.parse_args()
     if args.max_parallel > 4:
         print("[WARN] --max-parallel exceeds the recommended default of 4.")
     cpu_count = os.cpu_count() or 1
-    if args.max_parallel * 32 > cpu_count:
-        print(f"[WARN] max_parallel*32={args.max_parallel * 32} exceeds os.cpu_count()={cpu_count}.")
+    slurm_cpus_per_task = os.environ.get("SLURM_CPUS_PER_TASK")
+    effective_cpu_budget = int(slurm_cpus_per_task) if slurm_cpus_per_task and slurm_cpus_per_task.isdigit() else cpu_count
+    if args.max_parallel > effective_cpu_budget:
+        print(
+            f"[WARN] --max-parallel={args.max_parallel} exceeds available CPU budget={effective_cpu_budget}; "
+            "consider lowering parallelism."
+        )
 
     t0 = time.time()
     repo_root = Path.cwd().resolve()
@@ -396,8 +405,12 @@ def main() -> int:
 
     summary = format_summary(rows)
     print(summary)
-    (results_dir / "sweep_summary.txt").write_text(summary + "\n")
+    summary_path = results_dir / "sweep_summary.txt"
+    summary_path.write_text(summary + "\n")
 
+    print(f"[INFO] CSV results: {csv_path}")
+    print(f"[INFO] Summary: {summary_path}")
+    print(f"[INFO] Per-run simulator outputs: <repo>/<bench>/sim-sweep-rp<read_percent>-<arch>/**/sim.out")
     print(f"Total wall-clock time: {time.time() - t0:.2f}s")
     return 0
 
